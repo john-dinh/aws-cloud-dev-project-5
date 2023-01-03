@@ -19,8 +19,8 @@ export const deleteBook = async (userId: string, bookId: string) => {
         Bucket: process.env.ATTACHMENT_S3_BUCKET,
         Key: `${bookId}.jpg`,
       }, function(err, data) {
-        if (err) console.log(err, err.stack);  // error
-        else     console.log(`deleted ${bookId}.jpg`, data);
+        if (err) logger.info(err, err.stack);  // error
+        else     logger.info(`deleted ${bookId}.jpg`, data);
       });
     return await bookData.deleteBook(userId, bookId);
 }
