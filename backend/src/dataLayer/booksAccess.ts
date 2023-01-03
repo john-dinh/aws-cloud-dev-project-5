@@ -1,11 +1,7 @@
 import { DocumentClient } from 'aws-sdk/clients/dynamodb';
 import * as moment from 'moment';
 import * as AWS from 'aws-sdk';
-import { createLogger } from '../utils/logger'
 const AWSXRay = require('aws-xray-sdk');
-const XAWS = AWSXRay.captureAWS(AWS)
-
-const logger = createLogger('TodosAccess')
 
 export class BookAccess {
     constructor(
@@ -25,20 +21,20 @@ export class BookAccess {
     }
 
     async getBooksForPublish(publish, createdAt) {
+        console.log('createdAt', createdAt)
         let KeyConditionExpression = ""
         let ExpressionAttributeValues:{} =  {}
-
-        let format = "YYYY-MM-DD";
-        if(createdAt && moment(createdAt, format).isValid()) {
-            const fromDate = moment(createdAt, format).format(format)
-            const toDate = moment(createdAt, format).add(1, 'day').format(format)
+        
+        if(createdAt && moment(createdAt, "YYYY-MM-DD").isValid()) {
+            const fromDate = moment(createdAt, "YYYY-MM-DD").format("YYYY-MM-DD")
+            const toDate = moment(createdAt, "YYYY-MM-DD").add(1, 'day').format("YYYY-MM-DD")
             KeyConditionExpression="publish = :publish and createdAt BETWEEN :fromDate AND :toDate"
             ExpressionAttributeValues={":publish": publish, ":fromDate": fromDate, ":toDate": toDate}
         } else {
             KeyConditionExpression="publish = :publish"
             ExpressionAttributeValues={":publish": publish}
         }
-        logger.info('KeyConditionExpression=', KeyConditionExpression, ExpressionAttributeValues)
+        console.log('KeyConditionExpression=', KeyConditionExpression, ExpressionAttributeValues)
         const queryParams = {
             TableName: this.booksTable,
             IndexName: process.env.BOOKS_PUBLISH_INDEX,
@@ -56,6 +52,7 @@ export class BookAccess {
     }
 
     async deleteBook(userId: string, bookId: string) {
+
         const params = {
             TableName: this.booksTable,
             Key: {
@@ -65,7 +62,6 @@ export class BookAccess {
         };
 
         await this.docClient.delete(params).promise()
-        logger.info('Deleted BookId', bookId)
         return {
             statusCode: 200,
             headers: {
@@ -102,11 +98,9 @@ export class BookAccess {
                 return result.Attributes;
             })
             .catch(updateError => {
-                logger.info(`Oops, Book is not updated :(`, updateError);
+                console.log(`Oops, order is not updated :(`, updateError);
                 throw updateError;
             });
-
-        logger.info('Update BookId', bookId)
         return {
             statusCode: 204,
             headers: {
@@ -139,7 +133,7 @@ export class BookAccess {
                 return result.Attributes;
             })
             .catch(updateError => {
-                logger.info(`Oops, Book is not updated :(`, updateError);
+                console.log(`Oops, order is not updated :(`, updateError);
                 throw updateError;
             });
         return {
@@ -155,14 +149,8 @@ export class BookAccess {
 }
 
 function createDynamoDBClient() {
-    if (process.env.IS_OFFLINE) {
-        logger.info('Creating a local DynamoDB instance')
-        return new XAWS.DynamoDB.DocumentClient({
-            region: 'localhost',
-            endpoint: 'http://localhost:8000'
-        })
-    }
-
+    AWS.config.update({region: 'us-east-1'});
+    const XAWS = AWSXRay.captureAWS(AWS);
     return new XAWS.DynamoDB.DocumentClient()
 }
 

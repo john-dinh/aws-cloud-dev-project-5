@@ -28,7 +28,7 @@ export class AttachmentUtils {
   }
 }
   
-// Create DynamoDB client
+// Create DynameDB client
 function createDynamoDBClient() {
   if (process.env.IS_OFFLINE) {
     return new XAWS.DynamoDB.DocumentClient({

@@ -6,8 +6,7 @@ import { CreateBookRequest } from '../types/CreateBookRequest'
 import { UpdateBookRequest } from '../types/UpdateBookRequest'
 
 export async function getBooksForPublish(createdAt: string): Promise<Book[]> {
-  logger.info('Getting books')
-
+  console.log('Getting books')
   const response = await Axios.get(`${apiEndpoint}/books-publish/y/${createdAt}`, {
     headers: {
       'Content-Type': 'application/json',
@@ -17,8 +16,7 @@ export async function getBooksForPublish(createdAt: string): Promise<Book[]> {
 }
 
 export async function getBooks(idToken: string): Promise<Book[]> {
-  logger.info('Getting books')
-
+  console.log('Getting books')
   const response = await Axios.get(`${apiEndpoint}/books`, {
     headers: {
       'Content-Type': 'application/json',
