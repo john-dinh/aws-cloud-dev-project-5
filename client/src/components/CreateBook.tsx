@@ -267,6 +267,7 @@ export class CreateBook extends React.PureComponent<BooksProps, BooksState> {
             labelPosition='right'
             onClick={()=>this.onBookUpdate(this.state.indexBook)}
             positive
+            disabled={this.state.book.name =='' || this.state.book.name.length < 3}
           />
         </Modal.Actions>
       </Modal>
