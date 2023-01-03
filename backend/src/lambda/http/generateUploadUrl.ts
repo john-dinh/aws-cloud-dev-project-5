@@ -4,36 +4,32 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda'
 import * as middy from 'middy'
 import { cors, httpErrorHandler } from 'middy/middlewares'
 
-import { createAttachmentUrl } from '../../helpers/todos'
+import { createAttachmentPresignedUrl, updateAttachmentBook } from '../../businessLogic/books'
 import { getUserId } from '../utils'
 
-import { createLogger } from '../../utils/logger'
-const logger = createLogger('auth')
-
 export const handler = middy(
-  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    const todoId = event.pathParameters.todoId
-    let userId = getUserId(event)
-    const url = await createAttachmentUrl(todoId, userId)
-    logger.info('Generated upload url', url)
+    async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+        const bookId = event.pathParameters.bookId
+        const userId = getUserId(event)
+        const { read, write }  = await createAttachmentPresignedUrl(bookId)
+        await updateAttachmentBook({bookId, userId, attachmentUrl: read})
 
-    return {
-      statusCode: 201,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        uploadUrl: url
-      })
+        return {
+            statusCode: 200,
+            headers: {
+                'Access-Control-Allow-Origin': '*'
+            },
+            body: JSON.stringify({
+                uploadUrl: write
+            })
+        }
     }
-  }
 )
 
 handler
-  .use(httpErrorHandler())
-  .use(
-    cors({
-      credentials: true
-    })
-  )
+    .use(httpErrorHandler())
+    .use(
+        cors({
+            credentials: true
+        })
+    )

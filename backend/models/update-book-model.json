@@ -5,16 +5,18 @@
   "properties": {
     "name": {
       "type": "string",
-      "minLength": 3,
-      "maxLength": 300
+      "minLength": 1
     },
-    "dueDate": {
+    "description": {
+      "type": "string"
+    },
+    "createdAt": {
       "type": "string"
     }
   },
   "required": [
     "name",
-    "dueDate"
+    "createdAt"
   ],
   "additionalProperties": false
 }

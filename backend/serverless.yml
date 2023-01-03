@@ -1,12 +1,12 @@
-# Change the name of the org 
 org: digitalhypertech12
 app: serverless-todo-app
-service: serverless-todo-app
+service:
+  name: serverless-book-management-app
 
 plugins:
   - serverless-webpack
-  - serverless-iam-roles-per-function
-  - serverless-plugin-tracing
+  - serverless-aws-documentation
+  - serverless-reqvalidator-plugin
 
 provider:
   name: aws
@@ -14,121 +14,119 @@ provider:
 
   stage: ${opt:stage, 'dev'}
   region: ${opt:region, 'us-east-1'}
-
   tracing:
     lambda: true
     apiGateway: true
 
-  # Use these variables in the functions and resouorces section below. For example, 
+  # Use these variables in the functions and resouorces section below. For example,
   # ${self:provider.environment.ATTACHMENT_S3_BUCKET}
   environment:
-    TODOS_TABLE: Todos-${self:provider.stage}
-    TODOS_CREATED_AT_INDEX: CreatedAtIndex
-    ATTACHMENT_S3_BUCKET: digitalhypertech12-${self:provider.stage}
+    BOOKS_TABLE: Books-management-${self:provider.stage}
+    BOOKS_CREATED_AT_INDEX: CreatedAtIndex
+    BOOKS_PUBLISH_INDEX: 'PublishIndex'
+    ATTACHMENT_S3_BUCKET: digitalhypertech12-books-${self:provider.stage}
     SIGNED_URL_EXPIRATION: 300
+    IS_OFFLINE: false
 
-  logs:
-    # Enable API Gateway logs
-    restApi: true
+  iamRoleStatements:
+    # Add policies for S3
+    - Effect: Allow
+      Action: 's3:ListBucket'
+      Resource: '*'
+    - Effect: Allow
+      Action:
+        - s3:GetObject
+        - s3:PutObject
+        - s3:DeleteObject
+      Resource:
+        - 'arn:aws:s3:::${self:provider.environment.ATTACHMENT_S3_BUCKET}/*'
+    # Add policies for DynamoDB
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:PutItem
+        - dynamodb:GetItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.BOOKS_TABLE}
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+      Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.BOOKS_TABLE}/index/PublishIndex
+    - Effect: Allow
+      Action:
+        - xray:PutTelemetryRecords
+        - xray:PutTraceSegments
+      Resource: "*"
 
-  iam:
-    role:
-      statements:
-        - Effect: Allow
-          Action:
-            - xray:PutTelemetryRecords
-            - xray:PutTraceSegments
-          Resource: "*"
-
-
+# Main functions
 functions:
-
   Auth:
     handler: src/lambda/auth/auth0Authorizer.handler
 
-  # Configure this function - 
-  # Provide iamRoleStatements property for performing Actions on DynamoDB
-  GetTodos:
-    handler: src/lambda/http/getTodos.handler
+  GetBooksPublish:
+    handler: src/lambda/http/getBooksPublish.handler
     events:
       - http:
           method: get
-          path: todos
+          path: books-publish/{publish}/{createdAt}
+          cors: true
+
+  GetBooks:
+    handler: src/lambda/http/getBooks.handler
+    events:
+      - http:
+          method: get
+          path: books
           cors: true
           authorizer: Auth
-    iamRoleStatements:
-      - Effect: Allow
-        Action:
-          - dynamodb:Query
-        Resource: !GetAtt TodosTable.Arn
-      - Effect: Allow
-        Action:
-          - dynamodb:Query
-        Resource: '*'  
 
-  # Configure this function - 
-  # Provide iamRoleStatements property. Decide the Actions and AWS Resource. 
+  # Configure this function
+  # Provide iamRoleStatements property. Decide the Actions and AWS Resource.
   # To refer to an AWS resource defined in the "Resources" section, you can use "Resource: !GetAtt <resource-name>.Arn"
-  # To validate incoming HTTP requests, we have provided the request schemas in function definition below. 
-  CreateTodo:
-    handler: src/lambda/http/createTodo.handler
+  # To validate incoming HTTP requests, we have provided the request schemas in function definition below.
+  CreateBook:
+    handler: src/lambda/http/createBook.handler
     events:
       - http:
           method: post
-          path: todos
+          path: books
           cors: true
           authorizer: Auth
-          request:
-            schemas:
-              application/json: ${file(models/create-todo-model.json)}
-    # Configure aws role for put item              
-    iamRoleStatements:
-      - Effect: Allow
-        Action:
-          - dynamodb:PutItem
-        Resource: !GetAtt TodosTable.Arn
-      - Effect: Allow
-        Action:
-          - ses:VerifyEmailIdentity
-        Resource: '*'
+          reqValidatorName: RequestBodyValidator
+          documentation:
+            summary: Create a new Book
+            description: Create a new Book
+            requestModels:
+              'application/json': BookCreate
 
   # Configure this function
   # Provide property for setting up CORS, Authorizer, iamRoleStatements, and request schemas
-  UpdateTodo:
-    handler: src/lambda/http/updateTodo.handler
+  UpdateBook:
+    handler: src/lambda/http/updateBook.handler
     events:
       - http:
           method: patch
-          path: todos/{todoId}
+          path: books/{bookId}
           cors: true
-          request:
-            schemas:
-              application/json: ${file(models/update-todo-model.json)}
-    iamRoleStatements:
-      - Effect: Allow
-        Action:
-          - dynamodb:UpdateItem
-        Resource: !GetAtt TodosTable.Arn
-      - Effect: Allow
-        Action:
-          - dynamodb:UpdateItem
-        Resource: '*'  
-
+          authorizer: Auth
+          reqValidatorName: RequestBodyValidator
+          documentation:
+            summary: Update a Book
+            description: Update a Book
+            requestModels:
+              'application/json': BookUpdate
 
   # Configure this function
   # Provide property for setting up CORS, Authorizer, iamRoleStatements
-  DeleteTodo:
-    handler: src/lambda/http/deleteTodo.handler
+  DeleteBook:
+    handler: src/lambda/http/deleteBook.handler
     events:
       - http:
           method: delete
-          path: todos/{todoId}
+          path: books/{bookId}
           cors: true
-    iamRoleStatements:
-      - Effect: Allow
-        Action:
-          - dynamodb:DeleteItem
-        Resource: !GetAtt TodosTable.Arn
+          authorizer: Auth
 
   # Configure this function
   # Provide property for setting up CORS, Authorizer, iamRoleStatements
@@ -137,53 +135,49 @@ functions:
     events:
       - http:
           method: post
-          path: todos/{todoId}/attachment
+          path: books/{bookId}/attachment
           cors: true
-    iamRoleStatements:
-      - Effect: Allow
-        Action:
-          - s3:PutObject
-          - s3:GetObject
-          - '*'
-        Resource: !GetAtt AttachmentsBucket.Arn
-      - Effect: Allow
-        Action:
-          - dynamodb:UpdateItem
-        Resource: '*'  
-
+          authorizer: Auth
 
 resources:
   Resources:
     # Add necessary AWS resources. You will need at least the following AWS resources
     # Fill the properties
-    # Feel free to change the names as you like. 
+    # Feel free to change the names as you like.
     GatewayResponseDefault4XX:
       Type: AWS::ApiGateway::GatewayResponse
       Properties:
-        ResponseType: 'DEFAULT_4XX'
-        StatusCode: '400'
-        RestApiId: !Ref ApiGatewayRestApi
-    
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+          gatewayresponse.header.Access-Control-Allow-Methods: "'GET,OPTIONS,POST'"
+        ResponseType: DEFAULT_4XX
+        RestApiId:
+          Ref: ApiGatewayRestApi
+          
+
     # Create a DynamoDB table with local secondary index and a composite key
-    TodosTable:
+    BooksTable:
       Type: AWS::DynamoDB::Table
-      Properties:        
+      Properties:
         AttributeDefinitions:
           - AttributeName: userId
             AttributeType: S
-          - AttributeName: todoId
+          - AttributeName: bookId
+            AttributeType: S
+          - AttributeName: publish
             AttributeType: S
           - AttributeName: createdAt
             AttributeType: S
         KeySchema:
           - AttributeName: userId
             KeyType: HASH
-          - AttributeName: todoId
+          - AttributeName: bookId
             KeyType: RANGE
         BillingMode: PAY_PER_REQUEST
-        TableName: ${self:provider.environment.TODOS_TABLE}
+        TableName: ${self:provider.environment.BOOKS_TABLE}
         LocalSecondaryIndexes:
-          - IndexName: ${self:provider.environment.TODOS_CREATED_AT_INDEX}
+          - IndexName: ${self:provider.environment.BOOKS_CREATED_AT_INDEX}
             KeySchema:
               - AttributeName: userId
                 KeyType: HASH
@@ -191,16 +185,28 @@ resources:
                 KeyType: RANGE
             Projection:
               ProjectionType: ALL # What attributes will be copied to an index
+        GlobalSecondaryIndexes:
+          - IndexName: ${self:provider.environment.BOOKS_PUBLISH_INDEX}
+            KeySchema:
+              - AttributeName: publish
+                KeyType: HASH
+              - AttributeName: createdAt
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
 
-    # Complete the bucket properties below. 
+
+    # Complete the bucket properties below.
     # Do not forget to add the CorsConfiguration propoerty
     AttachmentsBucket:
       Type: AWS::S3::Bucket
       Properties:
         BucketName: ${self:provider.environment.ATTACHMENT_S3_BUCKET}
+      # Set the CORS policy
         CorsConfiguration:
           CorsRules:
-            - AllowedOrigins:
+            -
+              AllowedOrigins:
                 - '*'
               AllowedHeaders:
                 - '*'
@@ -218,13 +224,36 @@ resources:
       Type: AWS::S3::BucketPolicy
       Properties:
         PolicyDocument:
-          Id: serverlessBucketPolicy
+          Id: MyPolicy
           Version: '2012-10-17'
           Statement:
-            - Principal: '*'
+            - Sid: PublicReadForGetBucketObjects
               Effect: Allow
-              Action:
-                - 's3:GetObject'
-                - 's3:PutObject'
+              Principal: '*'
+              Action: 's3:GetObject'
               Resource: 'arn:aws:s3:::${self:provider.environment.ATTACHMENT_S3_BUCKET}/*'
         Bucket: !Ref AttachmentsBucket
+    RequestBodyValidator:
+      Type: AWS::ApiGateway::RequestValidator
+      Properties:
+        Name: 'request-body-validator'
+        RestApiId:
+          Ref: ApiGatewayRestApi
+        ValidateRequestBody: true
+        ValidateRequestParameters: true
+
+custom:
+  documentation:
+    api:
+      info:
+        version: v1.0.0
+        title: Udagram API
+        description: Serverless application for books
+    models:
+      - name: BookCreate
+        contentType: application/json
+        schema: ${file(models/create-book-model.json)}
+      - name: BookUpdate
+        contentType: application/json
+        schema: ${file(models/update-book-model.json)}
+
